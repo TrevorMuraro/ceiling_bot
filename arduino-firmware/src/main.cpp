@@ -1,16 +1,18 @@
 #include <ros.h>
 #include <Arduino.h>
+#include <stdio.h>
 
 #include <geometry_msgs/Vector3.h>
 
 ros::NodeHandle nh;
 
+char log_buffer[50];
 
 #ifndef LED_BUILTIN
 #define LED_BUILTIN 13
 #endif
 
-#define L_MOTOR_PWM_PIN 6
+#define L_MOTOR_PWM_PIN 8
 #define L_MOTOR_DIR_PIN 7
 #define R_MOTOR_PWM_PIN 5
 #define R_MOTOR_DIR_PIN 4
@@ -21,10 +23,10 @@ ros::NodeHandle nh;
 #define WHEEL_DIAMETER 0.2042 // in meters
 #define ENCODER_TICKS_PER_ROTATION 20 // 20 holes in encoder disc, only counting rising edges
 
-#define L_MOTOR_FWD HIGH
-#define L_MOTOR_BKWD LOW
-#define R_MOTOR_FWD HIGH
-#define R_MOTOR_BKWD LOW
+#define L_MOTOR_FWD_OR_STOP LOW
+#define L_MOTOR_BKWD HIGH
+#define R_MOTOR_FWD_OR_STOP LOW
+#define R_MOTOR_BKWD HIGH
 #define MAX_PWM 255 //Arduino analogWrite (PWM) always on is 255
 
 #define ENCODER_DEBOUNCE_TIME 1500 // in uS
@@ -77,10 +79,10 @@ void publishEncoders() {
   r_encoder_count = 0;
   timeOfLastPublish = millis();
 
-  if(l_motor_dir != L_MOTOR_FWD) {
+  if(l_motor_dir != L_MOTOR_FWD_OR_STOP) {
     encoder_message.x = -encoder_message.x;
   }
-  if(r_motor_dir != R_MOTOR_FWD) {
+  if(r_motor_dir != R_MOTOR_FWD_OR_STOP) {
     encoder_message.y = -encoder_message.y;
   }  
 
@@ -101,8 +103,13 @@ void publishEncoders() {
         reflect new drive directions
 */
 void driveWheelCallback(const geometry_msgs::Vector3 &wheel_cmd) {
+  analogWrite(LED_BUILTIN, HIGH);
+
   int leftWheelCmd = (int) wheel_cmd.x;
   int rightWheelCmd = (int) wheel_cmd.y;
+  
+  //snprintf(log_buffer, sizeof(log_buffer) - 1, "Received wheel commands %i, %i", leftWheelCmd, rightWheelCmd);
+  //nh.loginfo(log_buffer);
 
   publishEncoders();
 
@@ -119,22 +126,28 @@ void driveWheelCallback(const geometry_msgs::Vector3 &wheel_cmd) {
   }
 
   if(leftWheelCmd >= 0) {
-    l_motor_dir = L_MOTOR_FWD;
+    l_motor_dir = L_MOTOR_FWD_OR_STOP;
   } else {
     l_motor_dir = L_MOTOR_BKWD;
+    leftWheelSpeed = MAX_PWM - leftWheelSpeed;
   }
 
   if(rightWheelCmd >= 0) {
-    r_motor_dir = R_MOTOR_FWD;
+    r_motor_dir = R_MOTOR_FWD_OR_STOP;
   } else {
     r_motor_dir = R_MOTOR_BKWD;
+    rightWheelSpeed = MAX_PWM - rightWheelSpeed;
   }
+
+  //snprintf(log_buffer, sizeof(log_buffer) - 1, "Wheel speeds %i, %i", leftWheelSpeed, rightWheelSpeed);
+  //nh.loginfo(log_buffer);
 
   analogWrite(L_MOTOR_PWM_PIN, leftWheelSpeed);
   digitalWrite(L_MOTOR_DIR_PIN, l_motor_dir);
   analogWrite(R_MOTOR_PWM_PIN, rightWheelSpeed);
   digitalWrite(R_MOTOR_DIR_PIN, r_motor_dir);
 }
+
 
 ros::Subscriber<geometry_msgs::Vector3> motorSub("motor_cmd", &driveWheelCallback);
 
@@ -168,7 +181,6 @@ void setup() {
   r_encoder_count = 0;
 
 
-
   nh.initNode();
   nh.advertise(encoder_pub);
   nh.subscribe(motorSub);
@@ -180,8 +192,17 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
+/*
+  analogWrite(L_MOTOR_PWM_PIN, 255);
+  digitalWrite(L_MOTOR_DIR_PIN, HIGH);
+  analogWrite(R_MOTOR_PWM_PIN, 0);
+  digitalWrite(R_MOTOR_DIR_PIN, LOW);
+  */
+
   publishEncoders();
+  analogWrite(LED_BUILTIN, LOW);
 
   nh.spinOnce();
-  delay(250);
+  delay(1000);
 }
+
