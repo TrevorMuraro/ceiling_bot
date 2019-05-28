@@ -32,6 +32,7 @@ class ArucoNode():
         #rospy.loginfo("Starting node")
 
         self.image_sub = rospy.Subscriber('/usb_cam/image_raw', Image, callback=self.image_callback)
+        self.debug_image_pub = rospy.Publisher('/locate_aruco/aruco_debug', Image, queue_size=10)
 
         self.bridge = cv_bridge.CvBridge()
 
@@ -47,15 +48,14 @@ class ArucoNode():
 
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray_img, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
 
-        rospy.loginfo("corners: {corners}, ids: {ids}, rejectedImgPoints: {rejects}".format(corners=corners, ids=ids, rejects=rejectedImgPoints))
+        test_img = aruco.drawDetectedMarkers(cv_img, corners, borderColor=(0, 0, 255))
+        rosified_test_img = self.bridge.cv2_to_imgmsg(test_img, encoding="rgb8")
 
-        """
-        if ids is not None and len(ids) == 5:
-            for i, corner in zip(ids, corners):
-                rospy.loginfo("id: {id}, corner: {corner}".format(id=i, corner=corner))
-        """
+        self.debug_image_pub.publish(rosified_test_img)
 
-        # aruco.estimatePoseSingleMarkers
+        rvecs, tvecs = aruco.estimatePoseSingleMarkers(corners, 0.168, )
+
+        rospy.loginfo("rvecs: {rvecs}, tvecs: {tvecs}".format(rvecs=rvecs, tvecs=tvecs))
 
 if __name__ == '__main__':
     rospy.init_node('aruco_node')
