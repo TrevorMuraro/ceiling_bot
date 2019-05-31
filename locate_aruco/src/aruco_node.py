@@ -5,10 +5,11 @@ import cv_bridge
 import cv2
 from cv2 import aruco
 from sensor_msgs.msg import Image
+import numpy as np
 
 
 
-# Launch file needs to launch usb_cam_node
+# Launch file needs to launch usb_cam_node: rosrun usb_cam usb_cam_node
 # Subscribe to /usb_cam/image_raw, which publishes sensor_msgs/Image
 
 ARUCO_PARAMETERS = aruco.DetectorParameters_create()
@@ -25,6 +26,10 @@ board = aruco.GridBoard_create(
 
 rvecs, tvecs = None, None
 
+CAMERA_MATRIX = 
+
+DISTORTION_COEFFICIENTS = 
+
 class ArucoNode():
 
     def __init__(self):
@@ -32,7 +37,8 @@ class ArucoNode():
         #rospy.loginfo("Starting node")
 
         self.image_sub = rospy.Subscriber('/usb_cam/image_raw', Image, callback=self.image_callback)
-        self.debug_image_pub = rospy.Publisher('/locate_aruco/aruco_debug', Image, queue_size=10)
+        self.debug_image_pub_1 = rospy.Publisher('/locate_aruco/aruco_debug_stage_1', Image, queue_size=10)
+        self.debug_image_pub_2 = rospy.Publisher('/locate_aruco/aruco_debug_stage_2', Image, queue_size=10)
 
         self.bridge = cv_bridge.CvBridge()
 
@@ -48,14 +54,25 @@ class ArucoNode():
 
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray_img, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
 
+        """
         test_img = aruco.drawDetectedMarkers(cv_img, corners, borderColor=(0, 0, 255))
         rosified_test_img = self.bridge.cv2_to_imgmsg(test_img, encoding="rgb8")
 
-        self.debug_image_pub.publish(rosified_test_img)
+        self.debug_image_pub_1.publish(rosified_test_img)
+        """
 
-        rvecs, tvecs = aruco.estimatePoseSingleMarkers(corners, 0.168, )
+        rvecs, tvecs, _objPoints = aruco.estimatePoseSingleMarkers(corners, 0.168, CAMERA_MATRIX, DISTORTION_COEFFICIENTS)
 
-        rospy.loginfo("rvecs: {rvecs}, tvecs: {tvecs}".format(rvecs=rvecs, tvecs=tvecs))
+
+        rospy.loginfo("rvecs: {rvecs}, tvecs: {tvecs}, _objPoints: {points}".format(rvecs=rvecs, tvecs=tvecs, points=_objPoints))
+
+        if rvecs is not None:
+            test_img_2 = aruco.drawAxis(cv_img, CAMERA_MATRIX, DISTORTION_COEFFICIENTS, rvecs[0], tvecs[0], 0.168)
+            rosified_test_img_2 = self.bridge.cv2_to_imgmsg(test_img_2, encoding="rgb8")
+
+            self.debug_image_pub_2.publish(rosified_test_img_2)
+
+
 
 if __name__ == '__main__':
     rospy.init_node('aruco_node')
