@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   rospy
   std_msgs
+  aruco_msgs
 )
 
 ## System dependencies are found with CMake's conventions

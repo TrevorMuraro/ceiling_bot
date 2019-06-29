@@ -3,8 +3,9 @@
 import rospy
 import cv_bridge
 import cv2
-from cv2 import aruco
+from cv2 import aruco #pylint:disable=no-name-in-module
 from sensor_msgs.msg import Image, CameraInfo
+from aruco_msgs.msg import ArucoTransform, ArucoTransformArray
 import numpy as np
 
 
@@ -16,11 +17,13 @@ import numpy as np
 ARUCO_PARAMETERS = aruco.DetectorParameters_create()
 ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_6X6_250)
 
+ARUCO_SQUARE_SIZE = 0.168
+
 # The grid board type we're looking for
 board = aruco.GridBoard_create(
         markersX = 1,
         markersY = 1,
-        markerLength = 0.168, # In meters
+        markerLength = ARUCO_SQUARE_SIZE, # In meters
         markerSeparation = 0.1, # In meters
         dictionary = ARUCO_DICT
     )
@@ -37,8 +40,7 @@ class ArucoNode():
 
         self.image_sub = rospy.Subscriber('/usb_cam/image_raw', Image, callback=self.image_callback)
         self.caminfo_sub = rospy.Subscriber('/usb_cam/camera_info', CameraInfo, callback=self.caminfo_callback)
-        self.debug_image_pub_1 = rospy.Publisher('/locate_aruco/aruco_debug_stage_1', Image, queue_size=10)
-        self.debug_image_pub_2 = rospy.Publisher('/locate_aruco/aruco_debug_stage_2', Image, queue_size=10)
+        self.debug_image_pub = rospy.Publisher('/locate_aruco/aruco_debug', Image, queue_size=10)
 
         self.bridge = cv_bridge.CvBridge()
 
@@ -57,7 +59,7 @@ class ArucoNode():
                 rospy.logwarn("CameraInfo message has K matrix all zeros")
             else:
                 self.DISTORTION_COEFFICIENTS = caminfo_msg.D
-                self.CAMERA_MATRIX = [[0] * 3] * 3
+                self.CAMERA_MATRIX = np.zeros((3, 3))
 
                 for i in range(0, 3):
                     for j in range(0, 3):
@@ -70,29 +72,44 @@ class ArucoNode():
 
         if self.have_cam_info:
 
+            output_msg = ArucoTransformArray()
+            output_msg.header.seq = img_msg.header.seq
+            output_msg.header.stamp = img_msg.header.stamp
+            output_msg.header.frame_id = img_msg.header.frame_id
+
             cv_img = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="passthrough")
 
             gray_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
 
             corners, ids, rejectedImgPoints = aruco.detectMarkers(gray_img, ARUCO_DICT, parameters=ARUCO_PARAMETERS)
 
-            """
-            test_img = aruco.drawDetectedMarkers(cv_img, corners, borderColor=(0, 0, 255))
+            rvecs, tvecs, _objPoints = aruco.estimatePoseSingleMarkers(corners, ARUCO_SQUARE_SIZE, self.CAMERA_MATRIX, self.DISTORTION_COEFFICIENTS)
+
+
+            rospy.loginfo("ids: {ids}, rvecs: {rvecs}, tvecs: {tvecs}".format(ids=ids, rvecs=rvecs, tvecs=tvecs))
+
+
+            test_img = cv_img
+            if ids:
+                for i in range(len(ids)):
+                    test_img = aruco.drawAxis(test_img, self.CAMERA_MATRIX, self.DISTORTION_COEFFICIENTS, rvecs[i], tvecs[i], ARUCO_SQUARE_SIZE)
             rosified_test_img = self.bridge.cv2_to_imgmsg(test_img, encoding="rgb8")
+            self.debug_image_pub.publish(rosified_test_img)
 
-            self.debug_image_pub_1.publish(rosified_test_img)
-            """
+            if ids:
+                for i in range(len(ids)):
+                    marker_pose = ArucoTransform()
+                    marker_pose.id = ids[i]
 
-            rvecs, tvecs, _objPoints = aruco.estimatePoseSingleMarkers(corners, 0.168, CAMERA_MATRIX, DISTORTION_COEFFICIENTS)
+                    marker_pose.transform.translation.x = tvecs[i][0]
+                    marker_pose.transform.translation.y = tvecs[i][1]
+                    marker_pose.transform.translation.z = tvecs[i][2]
+
+                    #Quaternion stuff goes here
 
 
-            rospy.loginfo("rvecs: {rvecs}, tvecs: {tvecs}, _objPoints: {points}".format(rvecs=rvecs, tvecs=tvecs, points=_objPoints))
 
-            if rvecs is not None:
-                test_img_2 = aruco.drawAxis(cv_img, CAMERA_MATRIX, DISTORTION_COEFFICIENTS, rvecs[0], tvecs[0], 0.168)
-                rosified_test_img_2 = self.bridge.cv2_to_imgmsg(test_img_2, encoding="rgb8")
 
-                self.debug_image_pub_2.publish(rosified_test_img_2)
 
 
 

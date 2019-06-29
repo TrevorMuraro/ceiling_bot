@@ -53,6 +53,8 @@ add_message_files(
   FILES
   ArucoMapEntry.msg
   ArucoMapEntryArray.msg
+  ArucoTransform.msg
+  ArucoTransformArray.msg
 )
 
 ## Generate services in the 'srv' folder
