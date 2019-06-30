@@ -7,7 +7,7 @@ from cv2 import aruco #pylint:disable=no-name-in-module
 from sensor_msgs.msg import Image, CameraInfo
 from aruco_msgs.msg import ArucoTransform, ArucoTransformArray #pylint:disable=import-error
 import numpy as np
-
+from math import sin, cos
 
 
 # Launch file needs to launch usb_cam_node: rosrun usb_cam usb_cam_node
@@ -17,7 +17,7 @@ import numpy as np
 ARUCO_PARAMETERS = aruco.DetectorParameters_create()
 ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_6X6_250)
 
-ARUCO_SQUARE_SIZE = 0.168
+ARUCO_SQUARE_SIZE = 0.097
 
 # The grid board type we're looking for
 board = aruco.GridBoard_create(
@@ -41,6 +41,7 @@ class ArucoNode():
         self.image_sub = rospy.Subscriber('/usb_cam/image_raw', Image, callback=self.image_callback)
         self.caminfo_sub = rospy.Subscriber('/usb_cam/camera_info', CameraInfo, callback=self.caminfo_callback)
         self.debug_image_pub = rospy.Publisher('/locate_aruco/aruco_debug', Image, queue_size=10)
+        self.markers_pub = rospy.Publisher('/locate_aruco/aruco_transforms', ArucoTransformArray, queue_size=10)
 
         self.bridge = cv_bridge.CvBridge()
 
@@ -102,19 +103,35 @@ class ArucoNode():
             if ids is not None:
                 for i in range(len(ids)):
                     marker_pose = ArucoTransform()
-                    marker_pose.id = ids[i]
+                    marker_pose.id = ids[i][0]
 
                     marker_pose.transform.translation.x = tvecs[i][0][0]
                     marker_pose.transform.translation.y = tvecs[i][0][1]
                     marker_pose.transform.translation.z = tvecs[i][0][2]
 
-                    #Quaternion stuff goes here
+                    #Conversion from axis-angle to quaternion
+                    #Source: http://www.euclideanspace.com/maths/geometry/rotations/conversions/angleToQuaternion/
 
-                    dst, jacobian = cv2.Rodrigues(rvecs[i])
+                    #Get total angle of rotation from axis-angle
+                    angle = cv2.norm(rvecs[i][0])
+                    #Normalize axis-angle vector
+                    axis = (rvecs[i][0][0] / angle, rvecs[i][0][1] / angle, rvecs[i][0][2] / angle)
 
-                    #rospy.loginfo("dst: {dst}, jacobian: {j}".format(dst=dst, j=jacobian))
+                    x = axis[0] * sin(angle / 2)
+                    y = axis[1] * sin(angle / 2)
+                    z = axis[2] * sin(angle / 2)
+                    w = cos(angle / 2)
 
+                    marker_pose.transform.rotation.x = x
+                    marker_pose.transform.rotation.y = y
+                    marker_pose.transform.rotation.z = z
+                    marker_pose.transform.rotation.w = w
 
+                    output_msg.transforms.append(marker_pose)
+
+            self.markers_pub.publish(output_msg)
+
+            
 
 
 
