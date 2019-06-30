@@ -1,0 +1,9 @@
+-Implement static transforms from camera frame to robot or world frame (in a dedicated node or in another node?
+-Decide where the origin is - at the 0 marker, or on the floor below the 0 marker (and flipped 180)?
+-Decide how map initialization works - do I need to see the 0 marker to do it?
+-Decide map file format
+-Implement map file updating
+)
+
+-Set up motion planning action (should be relatively easy)
+-Tune wheel speed PIDs

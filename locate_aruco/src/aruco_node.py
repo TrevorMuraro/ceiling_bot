@@ -131,11 +131,6 @@ class ArucoNode():
 
             self.markers_pub.publish(output_msg)
 
-            
-
-
-
-
 
 if __name__ == '__main__':
     rospy.init_node('aruco_node')
