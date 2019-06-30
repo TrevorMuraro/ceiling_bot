@@ -5,7 +5,7 @@ import cv_bridge
 import cv2
 from cv2 import aruco #pylint:disable=no-name-in-module
 from sensor_msgs.msg import Image, CameraInfo
-from aruco_msgs.msg import ArucoTransform, ArucoTransformArray
+from aruco_msgs.msg import ArucoTransform, ArucoTransformArray #pylint:disable=import-error
 import numpy as np
 
 
@@ -86,26 +86,33 @@ class ArucoNode():
             rvecs, tvecs, _objPoints = aruco.estimatePoseSingleMarkers(corners, ARUCO_SQUARE_SIZE, self.CAMERA_MATRIX, self.DISTORTION_COEFFICIENTS)
 
 
+            #Tvecs: +x is to the right (as seen by camera), +y is down (as seen by camera), +z is further from camera
+            #Rvecs: 
+
             rospy.loginfo("ids: {ids}, rvecs: {rvecs}, tvecs: {tvecs}".format(ids=ids, rvecs=rvecs, tvecs=tvecs))
 
 
             test_img = cv_img
-            if ids:
+            if ids is not None:
                 for i in range(len(ids)):
                     test_img = aruco.drawAxis(test_img, self.CAMERA_MATRIX, self.DISTORTION_COEFFICIENTS, rvecs[i], tvecs[i], ARUCO_SQUARE_SIZE)
             rosified_test_img = self.bridge.cv2_to_imgmsg(test_img, encoding="rgb8")
             self.debug_image_pub.publish(rosified_test_img)
 
-            if ids:
+            if ids is not None:
                 for i in range(len(ids)):
                     marker_pose = ArucoTransform()
                     marker_pose.id = ids[i]
 
-                    marker_pose.transform.translation.x = tvecs[i][0]
-                    marker_pose.transform.translation.y = tvecs[i][1]
-                    marker_pose.transform.translation.z = tvecs[i][2]
+                    marker_pose.transform.translation.x = tvecs[i][0][0]
+                    marker_pose.transform.translation.y = tvecs[i][0][1]
+                    marker_pose.transform.translation.z = tvecs[i][0][2]
 
                     #Quaternion stuff goes here
+
+                    dst, jacobian = cv2.Rodrigues(rvecs[i])
+
+                    #rospy.loginfo("dst: {dst}, jacobian: {j}".format(dst=dst, j=jacobian))
 
 
 
